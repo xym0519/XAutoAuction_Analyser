@@ -1,0 +1,22 @@
+version: "3.8"
+
+networks:
+  app:
+    name: app
+    external: true
+
+services:
+  gateway:
+    image: nginx:latest
+    container_name: gateway
+    restart: always
+    networks:
+      - app
+    volumes:
+      - /data/gateway/conf:/etc/nginx
+      - /data/gateway/log:/var/log/nginx
+      - /data/gateway/dist:/usr/share/nginx/html
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - {out}:{in}

@@ -1,0 +1,22 @@
+version: "3.8"
+
+networks:
+  alpha:
+    name: alpha
+    external: true
+
+services:
+  mtdataaccess-service:
+    image: mcr.microsoft.com/dotnet/runtime-deps:6.0
+    container_name: mtdataaccess-service
+    restart: always
+    networks:
+      - alpha
+    volumes:
+      - /data/mtdataaccess-service/dist:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    command:
+      - sh
+      - "-c"
+      - "cd /data/ && chmod a+x ./ && ./MTDataAccess"

@@ -1,0 +1,33 @@
+version: "3.8"
+
+networks:
+  app:
+    name: app
+    external: true
+
+services:
+  im:
+    image: openjdk:8u282-jre-buster
+    container_name: im
+    restart: always
+    networks:
+      - app
+    volumes:
+      - /data/im/data:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    working_dir: "/data"
+    command: ["./bin/wildfirechat.sh"]
+
+  sfu:
+    container_name: sfu
+    image: pionwebrtc/ion-sfu:latest-allrpc
+    command: -c /configs/sfu.toml -jaddr :7000 -gaddr :50051
+    networks:
+      - app
+    volumes:
+      - /data/sfu/data/config.toml:/configs/sfu.toml
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - 5000-5200:5000-5200/udp

@@ -1,0 +1,40 @@
+version: "3.8"
+
+networks:
+  app:
+    name: app
+    external: true
+
+services:
+  admin:
+    image: nginx:latest
+    container_name: admin
+    restart: always
+    networks:
+      - app
+    volumes:
+      - /data/admin/dist:/usr/share/nginx/html
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+
+  weixin:
+    image: nginx:latest
+    container_name: weixin
+    restart: always
+    networks:
+      - app
+    volumes:
+      - /data/weixin/dist:/usr/share/nginx/html
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+
+  web:
+    image: nginx:latest
+    container_name: web
+    restart: always
+    networks:
+      - app
+    volumes:
+      - /data/web/dist:/usr/share/nginx/html
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro

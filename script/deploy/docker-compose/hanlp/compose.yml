@@ -1,0 +1,20 @@
+version: "3.8"
+
+networks:
+  app:
+    name: app
+    external: true
+
+services:
+  pdf:
+    image: registry.project.360cbs.com:8090/dotnet/runtime-dev-express:5.0
+    container_name: pdf
+    restart: always
+    networks:
+      - app
+    volumes:
+      - /data/ohausselection-pdf/dist:/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    command: ./PdfExportOhaus
+

@@ -1,0 +1,20 @@
+version: "3.8"
+
+networks:
+  app:
+    name: app
+    external: true
+
+services:
+  mysql:
+    image: mysql:8.0.28
+    container_name: mysql
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=360cbs.com
+    networks:
+      - app
+    volumes:
+      - /data/mysql/data:/var/lib/mysql
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro

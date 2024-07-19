@@ -1,0 +1,24 @@
+version: "3.8"
+
+networks:
+  app:
+    name: app
+    external: true
+
+services:
+  service:
+    image: registry.project.360cbs.com:8090/php-nginx:8.1.1
+    container_name: service
+    restart: always
+    networks:
+      - app
+    volumes:
+      - /data/service/logs:/data/logs
+      - /data/service/tmp:/data/tmp
+      - /data/service/dist:/data/www
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+
+
+
+      - /usr/share/ca-certificates:/usr/share/ca-certificates
