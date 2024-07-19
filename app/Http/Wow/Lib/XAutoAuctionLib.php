@@ -100,6 +100,8 @@ class XAutoAuctionLib
                 }
             }
 
+            self::analyse($connection);
+
             $itemList = DB::connection('mysql' . $dbIndex)->table('dat_item')->get();
             $itemMap = json_decode(json_encode($itemList), true);
             foreach ($itemMap as &$item) {
@@ -385,8 +387,6 @@ class XAutoAuctionLib
                                               left join imp_sellhistory b on dealdate = z.d
                                      group by z.d, z.w) y
                              order by y.d desc');
-
-
     }
 
 }
