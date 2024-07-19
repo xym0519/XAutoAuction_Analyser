@@ -8,17 +8,16 @@ class ItemLib
 {
     static $itemNameList = null;
 
-    public static function checkItem($itemName, $dbIndex)
+    public static function checkItem($itemName, $connection)
     {
         $itemName = trim($itemName);
         if (self::$itemNameList === null) {
-            self::$itemNameList = ItemModel::on('mysql' . $dbIndex)->pluck('itemname');
+            self::$itemNameList = ItemModel::on($connection)->pluck('itemname');
         }
         if (self::$itemNameList->contains($itemName)) {
             return true;
         }
 
-        ItemModel::on('mysql' . $dbIndex)->create(['itemname' => $itemName]);
         self::$itemNameList->add($itemName);
         return false;
     }

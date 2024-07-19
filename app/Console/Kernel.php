@@ -2,8 +2,7 @@
 
 namespace App\Console;
 
-use App\Http\Wow\Command\WowCommand;
-use App\Http\Wow\Command\WowCommand2;
+use App\Http\Wow\Command\XAutoAuctionCommand;
 use Illuminate\Console\Scheduling\Schedule;
 use Laravel\Lumen\Console\Kernel as ConsoleKernel;
 
@@ -15,8 +14,7 @@ class Kernel extends ConsoleKernel
      * @var array
      */
     protected $commands = [
-        WowCommand::class,
-        WowCommand2::class,
+        XAutoAuctionCommand::class
     ];
 
     /**

@@ -46,8 +46,7 @@ class XAutoAuctionLib
                 $scanList = json_decode($scanStr);
                 $scanItems = [];
                 foreach ($scanList as $itemName => $item) {
-                    $dbItem = $connection->table('dat_item')->where('itemname', $itemName)->first();
-                    if (empty($dbItem)) {
+                    if (!ItemLib::checkItem($itemName, $connection)) {
                         $connection->table('dat_item')->insert([
                             'itemname' => $itemName,
                             'vendorprice' => $item->vendorprice,
@@ -349,6 +348,44 @@ class XAutoAuctionLib
                                  a.groupprofitproportion=if(z.grouptotalprofit = 0, 0, ifnull(a.profit * a.dealcount, 0)),
                                  a.groupprofitproportion10=if(z.grouptotalprofit10 = 0, 0, ifnull(a.profit10 * a.dealcount10, 0)),
                                  a.groupprofitproportion30=if(z.grouptotalprofit30 = 0, 0, ifnull(a.profit30 * a.dealcount30, 0))');
+
+        // statistics
+        $connection->update('truncate table sta_dealcount');
+
+        $connection->update('insert into sta_dealcount
+                             select z.dealdate, x.sourcename, count(1) c from imp_sellhistory z
+                             inner join dat_item y on z.itemname=y.itemname and y.category=\'珠宝\'
+                             inner join dat_itemrecipe x on z.itemname = x.itemname
+                             where z.issuccess = 1
+                             group by z.dealdate, x.sourcename');
+
+        $connection->update('truncate table sta_dealjewcount');
+
+        $connection->update('insert into sta_dealjewcount
+                             select substr(y.d, 6) d, substr(y.w, 1,3) w, round(y.income/10000) i, y.success s,
+                                    if(y.total=0, 0, round(y.success/y.total*100)) r, y.total t,
+                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename=\'赤玉石\'), 0) 赤玉,
+                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename=\'紫黄晶\'), 0) 紫黄,
+                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename=\'王者琥珀\'), 0) 王者,
+                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename=\'祖尔之眼\'), 0) 祖尔,
+                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename=\'巨锆石\'), 0) 巨锆,
+                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename=\'恐惧石\'), 0) 恐惧,
+                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename=\'血玉石\'), 0) 血玉,
+                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename=\'帝黄晶\'), 0) 帝黄,
+                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename=\'秋色石\'), 0) 秋色,
+                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename=\'森林翡翠\'), 0) 森林,
+                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename=\'天蓝石\'), 0) 天蓝,
+                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename=\'曙光猫眼石\'), 0) 曙光
+                             from(
+                                 select z.d, z.w, ifnull(sum(b.price*b.count),0) income,
+                                            ifnull(count(issuccess),0) total,
+                                            ifnull(sum(issuccess),0) success
+                                     from (select from_unixtime(unix_timestamp()-day*24*3600, \'%Y-%m-%d\') d,
+                                                  from_unixtime(unix_timestamp()-day*24*3600,\'%W\') w from dat_days) z
+                                              left join imp_sellhistory b on dealdate = z.d
+                                     group by z.d, z.w) y
+                             order by y.d desc');
+
 
     }
 

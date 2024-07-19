@@ -18,11 +18,11 @@ $app->register(DBLogServiceProvider::class);
 $app->register(RequestLogServiceProvider::class);
 
 $app->middleware([
-    ExampleMiddleWare::class
+//    ExampleMiddleWare::class
 ]);
 
 $app->routeMiddleware([
-    'admin' => ExampleMiddleWare::class
+//    'admin' => ExampleMiddleWare::class
 ]);
 
 
