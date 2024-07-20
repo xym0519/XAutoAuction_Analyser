@@ -6,17 +6,17 @@ class ItemLib
 {
     static $itemNameList = null;
 
-    public static function checkItem($itemName, $connection)
+    public static function checkItem($item, $connection)
     {
-        $itemName = trim($itemName);
         if (self::$itemNameList === null) {
             self::$itemNameList = $connection->table('dat_item')->pluck('itemname');
         }
-        if (self::$itemNameList->contains($itemName)) {
+
+        if (self::$itemNameList->contains($item->itemname)) {
             return true;
         }
 
-        self::$itemNameList->add($itemName);
+        self::$itemNameList->push($item->itemname);
         return false;
     }
 }

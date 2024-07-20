@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 class XAutoAuctionLib
 {
     const XAuctionInfoListImportPrefix = 'XAuctionInfoListImport = ';
+    const XItemUpdateExportPrefix = 'XItemUpdateExport = ';
     const XSellExportPrefix = 'XSellExport = ';
     const XBuyExportPrefix = 'XBuyExport = ';
     const XScanExportPrefix = 'XScanExport = ';
@@ -22,19 +23,23 @@ class XAutoAuctionLib
         $outFile = fopen($tempPath, 'w');
 
         if ($inFile && $outFile) {
+            $itemUpdateStr = '';
+            $scanStr = '';
             $sellStr = '';
             $buyStr = '';
-            $scanStr = '';
 
             while (($line = fgets($inFile)) !== false) {
+                if (!empty($res = self::processLineExport($line, self::XItemUpdateExportPrefix))) {
+                    $itemUpdateStr = $res;
+                }
+                if (!empty($res = self::processLineExport($line, self::XScanExportPrefix))) {
+                    $scanStr = $res;
+                }
                 if (!empty($res = self::processLineExport($line, self::XSellExportPrefix))) {
                     $sellStr = $res;
                 }
                 if (!empty($res = self::processLineExport($line, self::XBuyExportPrefix))) {
                     $buyStr = $res;
-                }
-                if (!empty($res = self::processLineExport($line, self::XScanExportPrefix))) {
-                    $scanStr = $res;
                 }
             }
 
@@ -42,67 +47,92 @@ class XAutoAuctionLib
 
             // 处理数据
             $summary = '导入摘要:';
-            if (!empty($scanStr)) {
-                $scanList = json_decode($scanStr);
-                $scanItems = [];
-                foreach ($scanList as $itemName => $item) {
-                    if (!ItemLib::checkItem($itemName, $connection)) {
-                        $connection->table('dat_item')->insert([
-                            'itemname' => $itemName,
-                            'vendorprice' => $item->vendorprice,
-                            'category' => $item->category,
-                            'class' => $item->class
-                        ]);
-                    } else {
-                        $connection->table('dat_item')->where('itemname', $itemName)->update([
-                            'vendorprice' => $item->vendorprice,
-                            'category' => $item->category,
-                            'class' => $item->class
-                        ]);
+            if (!empty($itemUpdateStr)) {
+                $count = 0;
+                $list = json_decode($itemUpdateStr);
+                foreach ($list as $item) {
+                    if ($item->itemid > 0 and !empty($item->category)) {
+                        if (ItemLib::checkItem($item, $connection)) {
+                            $connection->table('dat_item')->where('itemname', $item->itemname)->update([
+                                'itemid' => $item->itemid,
+                                'category' => $item->category,
+                                'class' => $item->class,
+                                'vendorprice' => $item->vendorprice
+                            ]);
+                        } else {
+                            $connection->table('dat_item')->insert([
+                                'itemname' => $item->itemname,
+                                'itemid' => $item->itemid,
+                                'category' => $item->category,
+                                'class' => $item->class,
+                                'vendorprice' => $item->vendorprice
+                            ]);
+                        }
+                        $count++;
                     }
-
-                    foreach ($item->list as $record) {
-                        $scanItems[] = [
-                            'itemname' => $itemName,
-                            'scantime' => $record->time,
-                            'price' => $record->price,
+                }
+                $summary .= '    物品: ' . $count;
+            }
+            if (!empty($scanStr)) {
+                $list = json_decode($scanStr);
+                $items = [];
+                foreach ($list as $item) {
+                    if ($item->price > 0) {
+                        $items[] = [
+                            'itemname' => $item->itemname,
+                            'scantime' => $item->time,
+                            'price' => $item->price,
                             'createtime' => time()
                         ];
                     }
                 }
-                if (!empty($scanItems)) {
-                    $connection->table('imp_scanhistory')->insert($scanItems);
-                    $summary .= '    扫描: ' . count($scanItems);
+                if (!empty($items)) {
+                    $connection->table('imp_scanhistory')->insert($items);
+                    $summary .= '    扫描: ' . count($items);
                 }
             }
             if (!empty($sellStr)) {
-                $sellList = json_decode($sellStr);
-                foreach ($sellList as $item) {
-                    $item->dealtime = $item->time;
-                    $item->dealdate = date('Y-m-d', $item->time);
-                    $item->createtime = time();
+                $list = json_decode($sellStr);
+                $items = [];
+                foreach ($list as $item) {
+                    $items[] = [
+                        'itemname' => $item->itemname,
+                        'issuccess' => $item->issuccess ? 1 : 0,
+                        'price' => $item->price,
+                        'count' => $item->count,
+                        'dealtime' => $item->time,
+                        'dealdate' => date('Y-m-d', $item->time),
+                        'createtime' => time()
+                    ];
                 }
-                if (!empty($sellList)) {
-                    $connection->table('imp_sellhistory')->insert($sellList);
-                    $summary .= '    出售: ' . count($sellList);
+                if (!empty($items)) {
+                    $connection->table('imp_sellhistory')->insert($items);
+                    $summary .= '    出售: ' . count($items);
                 }
             }
             if (!empty($buyStr)) {
-                $buyList = json_decode($buyStr);
-                foreach ($buyList as $item) {
-                    $item->buytime = $item->time;
-                    $item->buydate = date('Y-m-d', $item->time);
-                    $item->createtime = time();
+                $list = json_decode($buyStr);
+                $items = [];
+                foreach ($list as $item) {
+                    $items[] = [
+                        'itemname' => $item->itemname,
+                        'price' => $item->price,
+                        'count' => $item->count,
+                        'buytime' => $item->time,
+                        'buydate' => date('Y-m-d', $item->time),
+                        'createtime' => time()
+                    ];
                 }
-                if (!empty($buyList)) {
-                    $connection->table('imp_buyhistory')->insert($buyList);
-                    $summary .= '    购买: ' . count($buyList);
+                if (!empty($items)) {
+                    $connection->table('imp_buyhistory')->insert($items);
+                    $summary .= '    购买: ' . count($items);
                 }
             }
 
             self::analyse($connection);
 
-            $itemList = DB::connection('mysql' . $dbIndex)->table('dat_item')->get();
+            $connection->commit();
+            $itemList = $connection->table('dat_item')->get();
             $itemMap = json_decode(json_encode($itemList), true);
             foreach ($itemMap as &$item) {
                 foreach ($item as $k => $v) {
@@ -114,9 +144,10 @@ class XAutoAuctionLib
             if ($inFile && $outFile) {
                 while (($line = fgets($inFile)) !== false) {
                     self::processLineImport($line, self::XAuctionInfoListImportPrefix, $itemMap);
+                    self::processLineExport($line, self::XItemUpdateExportPrefix);
+                    self::processLineExport($line, self::XScanExportPrefix);
                     self::processLineExport($line, self::XSellExportPrefix);
                     self::processLineExport($line, self::XBuyExportPrefix);
-                    self::processLineExport($line, self::XScanExportPrefix);
                     fwrite($outFile, $line);
                 }
             }
@@ -352,7 +383,8 @@ class XAutoAuctionLib
                                  a.groupprofitproportion30=if(z.grouptotalprofit30 = 0, 0, ifnull(a.profit30 * a.dealcount30, 0))');
 
         // statistics
-        $connection->update('truncate table sta_dealcount');
+        $connection->delete('delete from sta_dealcount');
+        $connection->commit();
 
         $connection->update('insert into sta_dealcount
                              select z.dealdate, x.sourcename, count(1) c from imp_sellhistory z
@@ -361,7 +393,7 @@ class XAutoAuctionLib
                              where z.issuccess = 1
                              group by z.dealdate, x.sourcename');
 
-        $connection->update('truncate table sta_dealjewcount');
+        $connection->delete('delete from sta_dealjewcount');
 
         $connection->update('insert into sta_dealjewcount
                              select substr(y.d, 6) d, substr(y.w, 1,3) w, round(y.income/10000) i, y.success s,
@@ -387,6 +419,7 @@ class XAutoAuctionLib
                                               left join imp_sellhistory b on dealdate = z.d
                                      group by z.d, z.w) y
                              order by y.d desc');
+        $connection->commit();
     }
 
 }

@@ -14,4 +14,5 @@ update dat_item set scanprice=0,scanprice10=0,scanprice30=0,
                     totalprofit=0,totalprofit10=0,totalprofit30=0,
                     profitproportion=0,profitproportion10=0,profitproportion30=0,
                     groupprofitproportion=0,groupprofitproportion10=0,groupprofitproportion30=0,
-                    groupdealproportion=0,groupdealproportion10=0,groupdealproportion30=0
+                    groupdealproportion=0,groupdealproportion10=0,groupdealproportion30=0,
+                    itemid=-1,vendorprice=0,category='',class=''
