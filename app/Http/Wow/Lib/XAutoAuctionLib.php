@@ -51,21 +51,29 @@ class XAutoAuctionLib
                 $count = 0;
                 $list = json_decode($itemUpdateStr);
                 foreach ($list as $item) {
-                    if ($item->itemid > 0 and !empty($item->category)) {
+                    if (!empty($item->itemname) && $item->itemid > 0 && !empty($item->itemlink)) {
                         if (ItemLib::checkItem($item, $connection)) {
                             $connection->table('dat_item')->where('itemname', $item->itemname)->update([
                                 'itemid' => $item->itemid,
+                                'itemlink' => $item->itemlink,
                                 'category' => $item->category,
                                 'class' => $item->class,
-                                'vendorprice' => $item->vendorprice
+                                'vendorprice' => $item->vendorprice,
+                                'quality' => $item->quality,
+                                'level' => $item->level,
+                                'icon' => $item->icon,
                             ]);
                         } else {
                             $connection->table('dat_item')->insert([
                                 'itemname' => $item->itemname,
                                 'itemid' => $item->itemid,
+                                'itemlink' => $item->itemlink,
                                 'category' => $item->category,
                                 'class' => $item->class,
-                                'vendorprice' => $item->vendorprice
+                                'vendorprice' => $item->vendorprice,
+                                'quality' => $item->quality,
+                                'level' => $item->level,
+                                'icon' => $item->icon,
                             ]);
                         }
                         $count++;
