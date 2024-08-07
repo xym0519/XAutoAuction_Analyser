@@ -1,9 +1,0 @@
-## Interface: 30300
-## Version: 0.0.9
-## Title: XXCraftRecord
-## Author: Broche
-## Notes: 制造分析
-## SavedVariablesPerCharacter: XXCraftHistory
-
-XXCraftRecord.lua
-
