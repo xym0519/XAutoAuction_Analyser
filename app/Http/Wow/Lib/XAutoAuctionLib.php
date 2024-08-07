@@ -345,9 +345,9 @@ class XAutoAuctionLib
 
         // lowestprice, lowestprice10, lowestprice30, profit, profit10, profit30
         $connection->update('update dat_item a
-                             set a.lowestprice=if(a.dealrate = 0, 9999999, (a.costprice + a.vendorprice * 0.15 * a.dealrate) / 0.95),
-                                 a.lowestprice10=if(a.dealrate10 = 0, 9999999, (a.costprice10 + a.vendorprice * 0.15 * a.dealrate10) / 0.95),
-                                 a.lowestprice30=if(a.dealrate30 = 0, 9999999, (a.costprice30 + a.vendorprice * 0.15 * a.dealrate30) / 0.95),
+                             set a.baseprice=if(a.dealrate = 0, 9999999, (a.costprice + a.vendorprice * 0.15 * a.dealrate) / 0.95),
+                                 a.baseprice10=if(a.dealrate10 = 0, 9999999, (a.costprice10 + a.vendorprice * 0.15 * a.dealrate10) / 0.95),
+                                 a.baseprice30=if(a.dealrate30 = 0, 9999999, (a.costprice30 + a.vendorprice * 0.15 * a.dealrate30) / 0.95),
                                  a.profit=if(a.dealrate = 0, 0, (a.dealprice - a.costprice) / a.dealrate - a.vendorprice * 0.15 * (1 - 1 / a.dealrate)),
                                  a.profit10=if(a.dealrate = 0, 0, (a.dealprice10 - a.costprice10) / a.dealrate10 - a.vendorprice * 0.15 * (1 - 1 / a.dealrate10)),
                                  a.profit30=if(a.dealrate = 0, 0, (a.dealprice30 - a.costprice30) / a.dealrate30 - a.vendorprice * 0.15 * (1 - 1 / a.dealrate30))');
