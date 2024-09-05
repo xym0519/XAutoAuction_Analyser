@@ -12,6 +12,9 @@ class XAutoAuctionLib
     const XBuyExportPrefix = 'XBuyExport = ';
     const XScanExportPrefix = 'XScanExport = ';
 
+    const TaxRate = 0.95;
+    const FeeRate = 0.15;
+
     static function process($filePath, $dbIndex)
     {
         $tempPath = $filePath . '.tmp' . date('Ymdhis');       // 创建一个临时文件路径
@@ -203,11 +206,15 @@ class XAutoAuctionLib
 
     public static function analyse($connection)
     {
+        $feeRate = self::FeeRate;
+        $taxRate = self::TaxRate;
+
         // scanprice, minscanprice, maxscanprice
         $connection->update('update dat_item a inner join
                                  (select itemname, avg(price) scanprice, min(price) minscanprice, max(price) maxscanprice
                                   from imp_scanhistory
                                   where price > 0
+                                    and scantime >= unix_timestamp() - 3 * 24 * 3600
                                   group by itemname) b on b.itemname = a.itemname
                              set a.scanprice=b.scanprice, a.minscanprice=b.minscanprice, a.maxscanprice=b.maxscanprice');
 
@@ -234,6 +241,7 @@ class XAutoAuctionLib
                                  (select itemname, sum(price*count)/sum(count) buyprice
                                   from imp_buyhistory
                                   where price > 0 and count > 0
+                                    and buytime >= unix_timestamp() - 3 * 24 * 3600
                                   group by itemname) b on b.itemname = a.itemname
                              set a.buyprice=b.buyprice');
 
@@ -288,6 +296,7 @@ class XAutoAuctionLib
                                   from imp_sellhistory
                                   where price > 0 and count > 0
                                   and issuccess = 1
+                                    and dealtime >= unix_timestamp() - 3 * 24 * 3600
                                   group by itemname) b on b.itemname = a.itemname
                              set a.dealprice=b.dealprice, a.dealcount=b.dealcount');
 
@@ -316,6 +325,7 @@ class XAutoAuctionLib
                                  (select itemname, sum(count) sellcount
                                   from imp_sellhistory
                                   where count > 0
+                                    and dealtime >= unix_timestamp() - 3 * 24 * 3600
                                   group by itemname) b on b.itemname = a.itemname
                              set a.sellcount=b.sellcount');
 
@@ -344,13 +354,13 @@ class XAutoAuctionLib
                                  dealrate30=if(dealcount30 = 0, 99, sellcount30 / dealcount30)');
 
         // lowestprice, lowestprice10, lowestprice30, profit, profit10, profit30
-        $connection->update('update dat_item a
-                             set a.baseprice=if(a.dealrate = 0, 9999999, (a.costprice + a.vendorprice * 0.15 * a.dealrate) / 0.95),
-                                 a.baseprice10=if(a.dealrate10 = 0, 9999999, (a.costprice10 + a.vendorprice * 0.15 * a.dealrate10) / 0.95),
-                                 a.baseprice30=if(a.dealrate30 = 0, 9999999, (a.costprice30 + a.vendorprice * 0.15 * a.dealrate30) / 0.95),
-                                 a.profit=if(a.dealrate = 0, 0, (a.dealprice - a.costprice) / a.dealrate - a.vendorprice * 0.15 * (1 - 1 / a.dealrate)),
-                                 a.profit10=if(a.dealrate = 0, 0, (a.dealprice10 - a.costprice10) / a.dealrate10 - a.vendorprice * 0.15 * (1 - 1 / a.dealrate10)),
-                                 a.profit30=if(a.dealrate = 0, 0, (a.dealprice30 - a.costprice30) / a.dealrate30 - a.vendorprice * 0.15 * (1 - 1 / a.dealrate30))');
+        $connection->update("update dat_item a
+                             set a.baseprice=if(a.dealrate = 0, 9999999, (a.costprice + a.vendorprice * ${feeRate} * a.dealrate) / ${taxRate}),
+                                 a.baseprice10=if(a.dealrate10 = 0, 9999999, (a.costprice10 + a.vendorprice * ${feeRate} * a.dealrate10) / ${taxRate}),
+                                 a.baseprice30=if(a.dealrate30 = 0, 9999999, (a.costprice30 + a.vendorprice * ${feeRate} * a.dealrate30) / ${taxRate}),
+                                 a.profit=if(a.dealrate = 0, 0, (a.dealprice - a.costprice) / a.dealrate - a.vendorprice * ${feeRate} * (1 - 1 / a.dealrate)),
+                                 a.profit10=if(a.dealrate = 0, 0, (a.dealprice10 - a.costprice10) / a.dealrate10 - a.vendorprice * ${feeRate} * (1 - 1 / a.dealrate10)),
+                                 a.profit30=if(a.dealrate = 0, 0, (a.dealprice30 - a.costprice30) / a.dealrate30 - a.vendorprice * ${feeRate} * (1 - 1 / a.dealrate30))");
 
         // profitrate, profitrate10, profitrate30
         $connection->update('update dat_item a
@@ -426,7 +436,7 @@ class XAutoAuctionLib
                                  select z.d, z.w, ifnull(sum(b.price*b.count),0) income,
                                             ifnull(count(issuccess),0) total,
                                             ifnull(sum(issuccess),0) success,
-                                            ifnull(sum(if(issuccess=0, c.vendorprice*0.3, 0)),0) fee
+                                            ifnull(sum(if(issuccess=0, c.vendorprice*${feeRate}, 0)),0) fee
                                      from (select from_unixtime(unix_timestamp()-day*24*3600, '%Y-%m-%d') d,
                                                   from_unixtime(unix_timestamp()-day*24*3600,'%W') w from dat_days) z
                                               left join imp_sellhistory b on dealdate = z.d
