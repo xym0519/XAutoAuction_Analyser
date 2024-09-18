@@ -210,67 +210,67 @@ class XAutoAuctionLib
         $taxRate = self::TaxRate;
 
         // scanprice, minscanprice, maxscanprice
-        $connection->update('update dat_item a inner join
+        $connection->update('update dat_item a left join
                                  (select itemname, avg(price) scanprice, min(price) minscanprice, max(price) maxscanprice
                                   from imp_scanhistory
                                   where price > 0
                                     and scantime >= unix_timestamp() - 3 * 24 * 3600
                                   group by itemname) b on b.itemname = a.itemname
-                             set a.scanprice=b.scanprice, a.minscanprice=b.minscanprice, a.maxscanprice=b.maxscanprice');
+                             set a.scanprice=ifnull(b.scanprice,9999999), a.minscanprice=ifnull(b.minscanprice,9999999), a.maxscanprice=ifnull(b.maxscanprice,9999999)');
 
         // scanprice10, minscanprice10, maxscanprice10
-        $connection->update('update dat_item a inner join
+        $connection->update('update dat_item a left join
                                  (select itemname, avg(price) scanprice, min(price) minscanprice, max(price) maxscanprice
                                   from imp_scanhistory
                                   where price > 0
                                     and scantime >= unix_timestamp() - 10 * 24 * 3600
                                   group by itemname) b on b.itemname = a.itemname
-                             set a.scanprice10=b.scanprice, a.minscanprice10=b.minscanprice, a.maxscanprice10=b.maxscanprice');
+                             set a.scanprice10=ifnull(b.scanprice,9999999), a.minscanprice10=ifnull(b.minscanprice,9999999), a.maxscanprice10=ifnull(b.maxscanprice,9999999)');
 
         // scanprice30, minscanprice30, maxscanprice30
-        $connection->update('update dat_item a inner join
+        $connection->update('update dat_item a left join
                                  (select itemname, avg(price) scanprice, min(price) minscanprice, max(price) maxscanprice
                                   from imp_scanhistory
                                   where price > 0
                                     and scantime >= unix_timestamp() - 30 * 24 * 3600
                                   group by itemname) b on b.itemname = a.itemname
-                             set a.scanprice30=b.scanprice, a.minscanprice30=b.minscanprice, a.maxscanprice30=b.maxscanprice');
+                             set a.scanprice30=ifnull(b.scanprice,9999999), a.minscanprice30=ifnull(b.minscanprice,9999999), a.maxscanprice30=ifnull(b.maxscanprice,9999999)');
 
         // buyprice
-        $connection->update('update dat_item a inner join
+        $connection->update('update dat_item a left join
                                  (select itemname, sum(price*count)/sum(count) buyprice
                                   from imp_buyhistory
                                   where price > 0 and count > 0
                                     and buytime >= unix_timestamp() - 3 * 24 * 3600
                                   group by itemname) b on b.itemname = a.itemname
-                             set a.buyprice=b.buyprice');
+                             set a.buyprice=ifnull(b.buyprice,9999999)');
 
         // buyprice10
-        $connection->update('update dat_item a inner join
+        $connection->update('update dat_item a left join
                                  (select itemname, sum(price*count)/sum(count) buyprice
                                   from imp_buyhistory
                                   where price > 0 and count > 0
                                     and buytime >= unix_timestamp() - 10 * 24 * 3600
                                   group by itemname) b on b.itemname = a.itemname
-                             set a.buyprice10=b.buyprice');
+                             set a.buyprice10=ifnull(b.buyprice,9999999)');
 
         // buyprice30
-        $connection->update('update dat_item a inner join
+        $connection->update('update dat_item a left join
                                  (select itemname, sum(price*count)/sum(count) buyprice
                                   from imp_buyhistory
                                   where price > 0 and count > 0
                                     and buytime >= unix_timestamp() - 30 * 24 * 3600
                                   group by itemname) b on b.itemname = a.itemname
-                             set a.buyprice30=b.buyprice');
+                             set a.buyprice30=ifnull(b.buyprice,9999999)');
 
         // default buyprice/10/30
         $connection->update('update dat_item a
-                             set a.buyprice=if(a.buyprice = 0, a.scanprice, a.buyprice),
-                                 a.buyprice10=if(a.buyprice10 = 0, a.scanprice10, a.buyprice10),
-                                 a.buyprice30=if(a.buyprice30 = 0, a.scanprice30, a.buyprice30)');
+                             set a.buyprice=if(a.buyprice = 9999999, a.scanprice, a.buyprice),
+                                 a.buyprice10=if(a.buyprice10 = 9999999, a.scanprice10, a.buyprice10),
+                                 a.buyprice30=if(a.buyprice30 = 9999999, a.scanprice30, a.buyprice30)');
 
         // makeprice, makeprice10, makeprice30
-        $connection->update('update dat_item a inner join
+        $connection->update('update dat_item a left join
                                  (select z.itemname, max(price) price, max(price10) price10, max(price30) price30
                                   from (select a.itemname,
                                                sum(a.sourcecount * b.buyprice)   price,
@@ -280,72 +280,77 @@ class XAutoAuctionLib
                                                  inner join dat_item b on a.sourcename = b.itemname
                                         group by a.itemname, a.type) z
                                   group by z.itemname) z on a.itemname = z.itemname
-                             set a.makeprice=z.price,
-                                 a.makeprice10=z.price10,
-                                 a.makeprice30=z.price30');
+                             set a.makeprice=ifnull(z.price,9999999),
+                                 a.makeprice10=ifnull(z.price10,9999999),
+                                 a.makeprice30=ifnull(z.price30,9999999)');
 
         // costprice, costprice10, costprice30
         $connection->update('update dat_item a
-                             set a.costprice=if(a.buyprice > a.makeprice, a.buyprice, a.makeprice),
-                                 a.costprice10=if(a.buyprice10 > a.makeprice10, a.buyprice10, a.makeprice10),
-                                 a.costprice30=if(a.buyprice30 > a.makeprice30, a.buyprice30, a.makeprice30)');
+                             set a.costprice=if(a.buyprice > a.makeprice and a.buyprice <> 9999999 and a.makeprice <> 9999999, a.buyprice, a.makeprice),
+                                 a.costprice10=if(a.buyprice10 > a.makeprice10 and a.buyprice10 <> 9999999 and a.makeprice10 <> 9999999, a.buyprice10, a.makeprice10),
+                                 a.costprice30=if(a.buyprice30 > a.makeprice30 and a.buyprice30 <> 9999999 and a.makeprice30 <> 9999999, a.buyprice30, a.makeprice30)');
+        // costprice, costprice10, costprice30
+        $connection->update('update dat_item a
+                             set a.costprice=if(a.buyprice = 9999999 , a.makeprice, if(a.makeprice = 9999999, a.buyprice, if(a.buyprice > a.makeprice, a.buyprice, a.makeprice))),
+                                 a.costprice10=if(a.buyprice10 = 9999999 , a.makeprice10, if(a.makeprice10 = 9999999, a.buyprice10, if(a.buyprice10 > a.makeprice10, a.buyprice10, a.makeprice10))),
+                                 a.costprice30=if(a.buyprice30 = 9999999 , a.makeprice30, if(a.makeprice30 = 9999999, a.buyprice30, if(a.buyprice30 > a.makeprice30, a.buyprice30, a.makeprice30)))');
 
         // dealprice, dealcount
-        $connection->update('update dat_item a inner join
+        $connection->update('update dat_item a left join
                                  (select itemname, sum(price*count)/sum(count) dealprice, sum(count) dealcount
                                   from imp_sellhistory
                                   where price > 0 and count > 0
                                   and issuccess = 1
                                     and dealtime >= unix_timestamp() - 3 * 24 * 3600
                                   group by itemname) b on b.itemname = a.itemname
-                             set a.dealprice=b.dealprice, a.dealcount=b.dealcount');
+                             set a.dealprice=ifnull(b.dealprice,0), a.dealcount=ifnull(b.dealcount,0)');
 
         // dealprice10, dealcount10
-        $connection->update('update dat_item a inner join
+        $connection->update('update dat_item a left join
                                  (select itemname, sum(price*count)/sum(count) dealprice, sum(count) dealcount
                                   from imp_sellhistory
                                   where price > 0 and count > 0
                                     and issuccess = 1
                                     and dealtime >= unix_timestamp() - 10 * 24 * 3600
                                   group by itemname) b on b.itemname = a.itemname
-                             set a.dealprice10=b.dealprice, a.dealcount10=b.dealcount');
+                             set a.dealprice10=ifnull(b.dealprice,0), a.dealcount10=ifnull(b.dealcount,0)');
 
         // dealprice30, dealcount30
-        $connection->update('update dat_item a inner join
+        $connection->update('update dat_item a left join
                                  (select itemname, sum(price*count)/sum(count) dealprice, sum(count) dealcount
                                   from imp_sellhistory
                                   where price > 0 and count > 0
                                     and issuccess = 1
                                     and dealtime >= unix_timestamp() - 30 * 24 * 3600
                                   group by itemname) b on b.itemname = a.itemname
-                             set a.dealprice30=b.dealprice, a.dealcount30=b.dealcount');
+                             set a.dealprice30=ifnull(b.dealprice,0), a.dealcount30=ifnull(b.dealcount,0)');
 
         // sellcount
-        $connection->update('update dat_item a inner join
+        $connection->update('update dat_item a left join
                                  (select itemname, sum(count) sellcount
                                   from imp_sellhistory
                                   where count > 0
                                     and dealtime >= unix_timestamp() - 3 * 24 * 3600
                                   group by itemname) b on b.itemname = a.itemname
-                             set a.sellcount=b.sellcount');
+                             set a.sellcount=ifnull(b.sellcount,0)');
 
         // sellcount10
-        $connection->update('update dat_item a inner join
+        $connection->update('update dat_item a left join
                                  (select itemname, sum(count) sellcount
                                   from imp_sellhistory
                                   where count > 0
                                     and dealtime >= unix_timestamp() - 10 * 24 * 3600
                                   group by itemname) b on b.itemname = a.itemname
-                             set a.sellcount10=b.sellcount');
+                             set a.sellcount10=ifnull(b.sellcount,0)');
 
         // sellcount30
-        $connection->update('update dat_item a inner join
+        $connection->update('update dat_item a left join
                                  (select itemname, sum(count) sellcount
                                   from imp_sellhistory
                                   where count > 0
                                     and dealtime >= unix_timestamp() - 30 * 24 * 3600
                                   group by itemname) b on b.itemname = a.itemname
-                             set a.sellcount30=b.sellcount');
+                             set a.sellcount30=ifnull(b.sellcount,0)');
 
         // dealrate, dealrate10, dealrate30
         $connection->update('update dat_item a
@@ -402,8 +407,6 @@ class XAutoAuctionLib
 
         // statistics
         $connection->delete('delete from sta_dealcount');
-        $connection->commit();
-
         $connection->update('insert into sta_dealcount
                              select z.dealdate, x.sourcename, count(1) c from imp_sellhistory z
                              inner join dat_item y on z.itemname=y.itemname and y.issts=1
@@ -411,8 +414,11 @@ class XAutoAuctionLib
                              where z.issuccess = 1
                              group by z.dealdate, x.sourcename');
 
-        $connection->delete('delete from sta_dealjewcount');
+        $connection->delete('delete from sta_buyprice');
+//        $connection->update('select * from buyhisto');
 
+
+        $connection->delete('delete from sta_dealjewcount');
         $connection->update("insert into sta_dealjewcount(日期, 星期, 收入, 成交, 
                                 出售, 成交率, 手续, 
                                 赤玉, 紫黄, 王者, 祖尔, 巨锆, 恐惧, 血玉, 帝黄, 秋色, 森林, 天蓝, 曙光, 天焰, 大地)
