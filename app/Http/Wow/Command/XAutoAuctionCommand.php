@@ -15,7 +15,7 @@ class XAutoAuctionCommand extends Command
 
         // XAutoAuction_Data
         $dataPaths = [
-            'e:\Games\Battle.net\World of Warcraft\_classic_\WTF\Account\150937928#1\SavedVariables\XAutoAuction_Data.lua'
+            'e:\Games\Battle.net\World of Warcraft\_classic_\WTF\Account\150937928#1\SavedVariables\XJewTool_Data.lua'
         ];
 
         foreach ($dataPaths as $dataPath) {

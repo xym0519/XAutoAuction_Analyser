@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\DB;
 
 class XAutoAuctionLib
 {
-    const XAuctionInfoListImportPrefix = 'XAuctionInfoListImport = ';
+    const XItemInfoListImportPrefix = 'XItemInfoListImport = ';
     const XItemUpdateExportPrefix = 'XItemUpdateExport = ';
     const XSellExportPrefix = 'XSellExport = ';
     const XBuyExportPrefix = 'XBuyExport = ';
@@ -154,7 +154,7 @@ class XAutoAuctionLib
 
             if ($inFile && $outFile) {
                 while (($line = fgets($inFile)) !== false) {
-                    self::processLineImport($line, self::XAuctionInfoListImportPrefix, $itemMap);
+                    self::processLineImport($line, self::XItemInfoListImportPrefix, $itemMap);
                     self::processLineExport($line, self::XItemUpdateExportPrefix);
                     self::processLineExport($line, self::XScanExportPrefix);
                     self::processLineExport($line, self::XSellExportPrefix);
