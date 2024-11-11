@@ -11,7 +11,7 @@ class WowTest extends TestCase
     public function testXAutoAuction()
     {
         $filePaths = [
-            'd:\Applications\Battle.net\World of Warcraft\_classic_\WTF\Account\150937928#1\SavedVariables\XAutoAuction_Data.lua',
+            'e:\Games\Battle.net\World of Warcraft\_classic_\WTF\Account\150937928#1\SavedVariables\XJewTool_Data.lua',
         ];
 
         foreach ($filePaths as $filePath) {
