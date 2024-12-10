@@ -7,10 +7,8 @@ use Illuminate\Support\Facades\DB;
 class XAutoAuctionLib
 {
     const XItemInfoListImportPrefix = 'XItemInfoListImport = ';
-    const XItemUpdateExportPrefix = 'XItemUpdateExport = ';
     const XSellExportPrefix = 'XSellExport = ';
     const XBuyExportPrefix = 'XBuyExport = ';
-    const XScanExportPrefix = 'XScanExport = ';
 
     const TaxRate = 0.95;
     const FeeRate = 0.15;
@@ -26,18 +24,10 @@ class XAutoAuctionLib
         $outFile = fopen($tempPath, 'w');
 
         if ($inFile && $outFile) {
-            $itemUpdateStr = '';
-            $scanStr = '';
             $sellStr = '';
             $buyStr = '';
 
             while (($line = fgets($inFile)) !== false) {
-                if (!empty($res = self::processLineExport($line, self::XItemUpdateExportPrefix))) {
-                    $itemUpdateStr = $res;
-                }
-                if (!empty($res = self::processLineExport($line, self::XScanExportPrefix))) {
-                    $scanStr = $res;
-                }
                 if (!empty($res = self::processLineExport($line, self::XSellExportPrefix))) {
                     $sellStr = $res;
                 }
@@ -50,58 +40,6 @@ class XAutoAuctionLib
 
             // 处理数据
             $summary = '导入摘要:';
-            if (!empty($itemUpdateStr)) {
-                $count = 0;
-                $list = json_decode($itemUpdateStr);
-                foreach ($list as $item) {
-                    if (!empty($item->itemname) && $item->itemid > 0 && !empty($item->itemlink)) {
-                        if (ItemLib::checkItem($item, $connection)) {
-                            $connection->table('dat_item')->where('itemname', $item->itemname)->update([
-                                'itemid' => $item->itemid,
-                                'itemlink' => $item->itemlink,
-                                'category' => $item->category,
-                                'class' => $item->class,
-                                'vendorprice' => $item->vendorprice,
-                                'quality' => $item->quality,
-                                'level' => $item->level,
-                                'icon' => $item->icon,
-                            ]);
-                        } else {
-                            $connection->table('dat_item')->insert([
-                                'itemname' => $item->itemname,
-                                'itemid' => $item->itemid,
-                                'itemlink' => $item->itemlink,
-                                'category' => $item->category,
-                                'class' => $item->class,
-                                'vendorprice' => $item->vendorprice,
-                                'quality' => $item->quality,
-                                'level' => $item->level,
-                                'icon' => $item->icon,
-                            ]);
-                        }
-                        $count++;
-                    }
-                }
-                $summary .= '    物品: ' . $count;
-            }
-            if (!empty($scanStr)) {
-                $list = json_decode($scanStr);
-                $items = [];
-                foreach ($list as $item) {
-                    if ($item->price > 0) {
-                        $items[] = [
-                            'itemname' => $item->itemname,
-                            'scantime' => $item->time,
-                            'price' => $item->price,
-                            'createtime' => time()
-                        ];
-                    }
-                }
-                if (!empty($items)) {
-                    $connection->table('imp_scanhistory')->insert($items);
-                    $summary .= '    扫描: ' . count($items);
-                }
-            }
             if (!empty($sellStr)) {
                 $list = json_decode($sellStr);
                 $items = [];
@@ -155,8 +93,6 @@ class XAutoAuctionLib
             if ($inFile && $outFile) {
                 while (($line = fgets($inFile)) !== false) {
                     self::processLineImport($line, self::XItemInfoListImportPrefix, $itemMap);
-                    self::processLineExport($line, self::XItemUpdateExportPrefix);
-                    self::processLineExport($line, self::XScanExportPrefix);
                     self::processLineExport($line, self::XSellExportPrefix);
                     self::processLineExport($line, self::XBuyExportPrefix);
                     fwrite($outFile, $line);
@@ -209,267 +145,101 @@ class XAutoAuctionLib
         $feeRate = self::FeeRate;
         $taxRate = self::TaxRate;
 
-        // scanprice
-        $connection->update('update dat_item a left join
-                                 (select itemname, avg(price) scanprice
-                                  from imp_scanhistory
-                                  where price > 0
-                                    and scantime >= unix_timestamp() - 3 * 24 * 3600
-                                  group by itemname) b on b.itemname = a.itemname
-                             set a.scanprice=ifnull(b.scanprice,9999999)');
-
-        // scanprice10
-        $connection->update('update dat_item a left join
-                                 (select itemname, avg(price) scanprice
-                                  from imp_scanhistory
-                                  where price > 0
-                                    and scantime >= unix_timestamp() - 10 * 24 * 3600
-                                  group by itemname) b on b.itemname = a.itemname
-                             set a.scanprice10=ifnull(b.scanprice,9999999)');
-
-        // scanprice30
-        $connection->update('update dat_item a left join
-                                 (select itemname, avg(price) scanprice
-                                  from imp_scanhistory
-                                  where price > 0
-                                    and scantime >= unix_timestamp() - 30 * 24 * 3600
-                                  group by itemname) b on b.itemname = a.itemname
-                             set a.scanprice30=ifnull(b.scanprice,9999999)');
+        // init
+        $connection->update('insert into imp_buyhistory_his
+                               select * from imp_buyhistory
+                                 where buytime < unix_timestamp(curdate()) - 15*24*3600');
+        $connection->update('delete from imp_buyhistory
+                               where buytime < unix_timestamp(curdate()) - 15*24*3600');
+        $connection->update('insert into imp_sellhistory_his
+                               select * from imp_sellhistory
+                                 where dealtime < unix_timestamp(curdate()) - 15*24*3600');
+        $connection->update('delete from imp_sellhistory
+                               where dealtime < unix_timestamp(curdate()) - 15*24*3600');
 
         // buyprice
         $connection->update('update dat_item a left join
                                  (select itemname, sum(price*count)/sum(count) buyprice
                                   from imp_buyhistory
                                   where price > 0 and count > 0
-                                    and buytime >= unix_timestamp() - 3 * 24 * 3600
+                                  and buytime > unix_timestamp(curdate()) - 3*24*3600
                                   group by itemname) b on b.itemname = a.itemname
-                             set a.buyprice=ifnull(b.buyprice,9999999)');
+                             set a.buyprice=if(b.buyprice is null, a.buyprice, b.buyprice*0.9+a.buyprice*0.1)');
 
-        // buyprice10
+        // dealprice, dealcount, dealbatchcount
         $connection->update('update dat_item a left join
-                                 (select itemname, sum(price*count)/sum(count) buyprice
-                                  from imp_buyhistory
-                                  where price > 0 and count > 0
-                                    and buytime >= unix_timestamp() - 10 * 24 * 3600
-                                  group by itemname) b on b.itemname = a.itemname
-                             set a.buyprice10=ifnull(b.buyprice,9999999)');
-
-        // buyprice30
-        $connection->update('update dat_item a left join
-                                 (select itemname, sum(price*count)/sum(count) buyprice
-                                  from imp_buyhistory
-                                  where price > 0 and count > 0
-                                    and buytime >= unix_timestamp() - 30 * 24 * 3600
-                                  group by itemname) b on b.itemname = a.itemname
-                             set a.buyprice30=ifnull(b.buyprice,9999999)');
-
-        // default buyprice/10/30
-        $connection->update('update dat_item a
-                             set a.buyprice=if(a.buyprice = 9999999, a.scanprice, a.buyprice),
-                                 a.buyprice10=if(a.buyprice10 = 9999999, a.scanprice10, a.buyprice10),
-                                 a.buyprice30=if(a.buyprice30 = 9999999, a.scanprice30, a.buyprice30)');
-
-        // makeprice, makeprice10, makeprice30
-        $connection->update('update dat_item a left join
-                                 (select z.itemname, max(price) price, max(price10) price10, max(price30) price30
-                                  from (select a.itemname,
-                                               sum(a.sourcecount * b.buyprice)   price,
-                                               sum(a.sourcecount * b.buyprice10) price10,
-                                               sum(a.sourcecount * b.buyprice30) price30
-                                        from dat_itemrecipe a
-                                                 inner join dat_item b on a.sourcename = b.itemname
-                                        group by a.itemname, a.type) z
-                                  group by z.itemname) z on a.itemname = z.itemname
-                             set a.makeprice=ifnull(z.price,9999999),
-                                 a.makeprice10=ifnull(z.price10,9999999),
-                                 a.makeprice30=ifnull(z.price30,9999999)');
-
-        // costprice, costprice10, costprice30
-        $connection->update('update dat_item a
-                             set a.costprice=if(a.buyprice > a.makeprice and a.buyprice <> 9999999 and a.makeprice <> 9999999, a.buyprice, a.makeprice),
-                                 a.costprice10=if(a.buyprice10 > a.makeprice10 and a.buyprice10 <> 9999999 and a.makeprice10 <> 9999999, a.buyprice10, a.makeprice10),
-                                 a.costprice30=if(a.buyprice30 > a.makeprice30 and a.buyprice30 <> 9999999 and a.makeprice30 <> 9999999, a.buyprice30, a.makeprice30)');
-        // costprice, costprice10, costprice30
-        $connection->update('update dat_item a
-                             set a.costprice=if(a.buyprice = 9999999 , a.makeprice, if(a.makeprice = 9999999, a.buyprice, if(a.buyprice > a.makeprice, a.buyprice, a.makeprice))),
-                                 a.costprice10=if(a.buyprice10 = 9999999 , a.makeprice10, if(a.makeprice10 = 9999999, a.buyprice10, if(a.buyprice10 > a.makeprice10, a.buyprice10, a.makeprice10))),
-                                 a.costprice30=if(a.buyprice30 = 9999999 , a.makeprice30, if(a.makeprice30 = 9999999, a.buyprice30, if(a.buyprice30 > a.makeprice30, a.buyprice30, a.makeprice30)))');
-
-        // dealprice, dealcount
-        $connection->update('update dat_item a left join
-                                 (select itemname, sum(price*count)/sum(count) dealprice, sum(count) dealcount
+                                 (select itemname, sum(price*count)/sum(count) dealprice, sum(count) dealcount, count(1) dealbatchcount
                                   from imp_sellhistory
                                   where price > 0 and count > 0
                                   and issuccess = 1
-                                    and dealtime >= unix_timestamp() - 3 * 24 * 3600
+                                  and dealtime > unix_timestamp(curdate()) - 3*24*3600
                                   group by itemname) b on b.itemname = a.itemname
-                             set a.dealprice=ifnull(b.dealprice,0), a.dealcount=ifnull(b.dealcount,0)');
+                             set a.dealprice=ifnull(b.dealprice,0), a.dealcount=ifnull(b.dealcount,0), a.dealbatchcount=ifnull(b.dealbatchcount,0)');
 
-        // dealprice10, dealcount10
+        // sellcount, sellbatchcount
         $connection->update('update dat_item a left join
-                                 (select itemname, sum(price*count)/sum(count) dealprice, sum(count) dealcount
-                                  from imp_sellhistory
-                                  where price > 0 and count > 0
-                                    and issuccess = 1
-                                    and dealtime >= unix_timestamp() - 10 * 24 * 3600
-                                  group by itemname) b on b.itemname = a.itemname
-                             set a.dealprice10=ifnull(b.dealprice,0), a.dealcount10=ifnull(b.dealcount,0)');
-
-        // dealprice30, dealcount30
-        $connection->update('update dat_item a left join
-                                 (select itemname, sum(price*count)/sum(count) dealprice, sum(count) dealcount
-                                  from imp_sellhistory
-                                  where price > 0 and count > 0
-                                    and issuccess = 1
-                                    and dealtime >= unix_timestamp() - 30 * 24 * 3600
-                                  group by itemname) b on b.itemname = a.itemname
-                             set a.dealprice30=ifnull(b.dealprice,0), a.dealcount30=ifnull(b.dealcount,0)');
-
-        // sellcount
-        $connection->update('update dat_item a left join
-                                 (select itemname, sum(count) sellcount
+                                 (select itemname, sum(count) sellcount, count(1) sellbatchcount
                                   from imp_sellhistory
                                   where count > 0
-                                    and dealtime >= unix_timestamp() - 3 * 24 * 3600
+                                  and dealtime > unix_timestamp(curdate()) - 3*24*3600
                                   group by itemname) b on b.itemname = a.itemname
-                             set a.sellcount=ifnull(b.sellcount,0)');
+                             set a.sellcount=ifnull(b.sellcount,0), a.sellbatchcount=ifnull(b.sellbatchcount,0)');
 
-        // sellcount10
-        $connection->update('update dat_item a left join
-                                 (select itemname, sum(count) sellcount
-                                  from imp_sellhistory
-                                  where count > 0
-                                    and dealtime >= unix_timestamp() - 10 * 24 * 3600
-                                  group by itemname) b on b.itemname = a.itemname
-                             set a.sellcount10=ifnull(b.sellcount,0)');
-
-        // sellcount30
-        $connection->update('update dat_item a left join
-                                 (select itemname, sum(count) sellcount
-                                  from imp_sellhistory
-                                  where count > 0
-                                    and dealtime >= unix_timestamp() - 30 * 24 * 3600
-                                  group by itemname) b on b.itemname = a.itemname
-                             set a.sellcount30=ifnull(b.sellcount,0)');
-
-        // dealrate, dealrate10, dealrate30
+        // dealrate
         $connection->update('update dat_item a
-                             set dealrate=if(dealcount = 0, 99, sellcount / dealcount),
-                                 dealrate10=if(dealcount10 = 0, 99, sellcount10 / dealcount10),
-                                 dealrate30=if(dealcount30 = 0, 99, sellcount30 / dealcount30)');
-
-//        // lowestprice, lowestprice10, lowestprice30, profit, profit10, profit30
-//        $connection->update("update dat_item a
-//                             set a.baseprice=if(a.dealrate = 0, 9999999, (a.costprice + a.vendorprice * ${feeRate} * a.dealrate) / ${taxRate}),
-//                                 a.baseprice10=if(a.dealrate10 = 0, 9999999, (a.costprice10 + a.vendorprice * ${feeRate} * a.dealrate10) / ${taxRate}),
-//                                 a.baseprice30=if(a.dealrate30 = 0, 9999999, (a.costprice30 + a.vendorprice * ${feeRate} * a.dealrate30) / ${taxRate}),
-//                                 a.profit=if(a.dealrate = 0, 0, (a.dealprice - a.costprice) / a.dealrate - a.vendorprice * ${feeRate} * (1 - 1 / a.dealrate)),
-//                                 a.profit10=if(a.dealrate = 0, 0, (a.dealprice10 - a.costprice10) / a.dealrate10 - a.vendorprice * ${feeRate} * (1 - 1 / a.dealrate10)),
-//                                 a.profit30=if(a.dealrate = 0, 0, (a.dealprice30 - a.costprice30) / a.dealrate30 - a.vendorprice * ${feeRate} * (1 - 1 / a.dealrate30))");
-//
-//        // profitrate, profitrate10, profitrate30
-//        $connection->update('update dat_item a
-//                             set a.profitrate=if(a.costprice = 0, 0, a.profit / a.costprice),
-//                                 a.profitrate10=if(a.costprice10 = 0, 0, a.profit10 / a.costprice10),
-//                                 a.profitrate30=if(a.costprice30 = 0, 0, a.profit30 / a.costprice30)');
-//
-//        // totalprofit, totalprofit10, totalprofit30, profitproportion, profitproportion10, profitproportion30
-//        $connection->update('update dat_item a inner join
-//                                 (select sum(profit * dealcount)     sumprofit,
-//                                         sum(profit10 * dealcount10) sumprofit10,
-//                                         sum(profit30 * dealcount30) sumprofit30
-//                                  from dat_item) b
-//                             set a.totalprofit=a.profit * a.dealcount,
-//                                 a.totalprofit10=a.profit10 * a.dealcount10,
-//                                 a.totalprofit30=a.profit30 * a.dealcount30,
-//                                 a.profitproportion=if(b.sumprofit = 0, 0, a.profit * a.dealcount / b.sumprofit),
-//                                 a.profitproportion10=if(b.sumprofit10 = 0, 0, a.profit10 * a.dealcount10 / b.sumprofit10),
-//                                 a.profitproportion30=if(b.sumprofit30 = 0, 0, a.profit30 * a.dealcount30 / b.sumprofit30)');
-//
-//        // groupdealproportion, groupdealproportion10, groupdealproportion30, groupprofitproportion, groupprofitproportion10, groupprofitproportion30
-//        $connection->update('update dat_item a left join
-//                                 (select `group`,
-//                                         sum(dealcount)              groupdealcount,
-//                                         sum(dealcount10)            groupdealcount10,
-//                                         sum(dealcount30)            groupdealcount30,
-//                                         sum(profit * dealcount)     grouptotalprofit,
-//                                         sum(profit10 * dealcount10) grouptotalprofit10,
-//                                         sum(profit30 * dealcount30) grouptotalprofit30
-//                                  from dat_item
-//                                  where `group` <> \'\'
-//                                  group by `group`) z on a.`group` = z.`group`
-//                             set a.groupdealproportion=if(z.groupdealcount = 0, 0, ifnull(a.dealcount / z.groupdealcount, 0)),
-//                                 a.groupdealproportion10=if(z.groupdealcount10 = 0, 0, ifnull(a.dealcount10 / z.groupdealcount10, 0)),
-//                                 a.groupdealproportion30=if(z.groupdealcount30 = 0, 0, ifnull(a.dealcount30 / z.groupdealcount30, 0)),
-//                                 a.groupprofitproportion=if(z.grouptotalprofit = 0, 0, ifnull(a.profit * a.dealcount, 0)),
-//                                 a.groupprofitproportion10=if(z.grouptotalprofit10 = 0, 0, ifnull(a.profit10 * a.dealcount10, 0)),
-//                                 a.groupprofitproportion30=if(z.grouptotalprofit30 = 0, 0, ifnull(a.profit30 * a.dealcount30, 0))');
+                             set dealrate=if(dealbatchcount = 0, 99, sellbatchcount / dealbatchcount)');
 
         // statistics
         $connection->delete('delete from sta_dealcount');
-        $connection->update('insert into sta_dealcount
-                             select z.dealdate, x.sourcename, count(1) c from imp_sellhistory z
-                             inner join dat_item y on z.itemname=y.itemname and y.issts=1
-                             inner join dat_itemrecipe x on z.itemname = x.itemname
-                             where z.issuccess = 1
-                             group by z.dealdate, x.sourcename');
-
-        $connection->delete('delete from sta_buyprice');
-//        $connection->update('select * from buyhisto');
-
+        $connection->update("insert into sta_dealcount
+                             select z.dealdate, x.sourcename, count(1) sellcount, sum(z.issuccess) dealcount,
+                                    sum(if(z.issuccess=1, z.price, 0)) income, sum(z.fee)
+                               from (select z.*, if(z.issuccess=0, z.count*y.vendorprice*${feeRate}, 0) fee from imp_sellhistory z inner join dat_item y on z.itemname=y.itemname) z
+                               inner join dat_itemrecipe x on z.itemname = x.itemname
+                             group by z.dealdate, x.sourcename");
 
         $connection->delete('delete from sta_dealjewcount');
-        $connection->update("insert into sta_dealjewcount(日期, 星期, 收入, 成交, 
-                                出售, 成交率, 手续, 
-                                赤玉, 紫黄, 王者, 祖尔, 巨锆, 恐惧, 血玉, 帝黄, 秋色, 森林, 天蓝, 曙光, 天焰, 大地)
-                             select substr(y.d, 6) 日期, substr(y.w, 1,3) 星期, round(y.income/10000) 收入, y.success 成交,
-                                    y.total 出售, if(y.total=0, 0, round(y.success/y.total*100)) 成交率, round(fee/10000) 手续,
-                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename='赤玉石'), 0) 赤玉,
-                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename='紫黄晶'), 0) 紫黄,
-                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename='王者琥珀'), 0) 王者,
-                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename='祖尔之眼'), 0) 祖尔,
-                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename='巨锆石'), 0) 巨锆,
-                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename='恐惧石'), 0) 恐惧,
-                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename='血玉石'), 0) 血玉,
-                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename='帝黄晶'), 0) 帝黄,
-                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename='秋色石'), 0) 秋色,
-                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename='森林翡翠'), 0) 森林,
-                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename='天蓝石'), 0) 天蓝,
-                                    ifnull((select c from sta_dealcount a where a.dealdate=y.d and a.sourcename='曙光猫眼石'), 0) 曙光,
-                                    ifnull((select c from sta_dealcount a where a.dealdate = y.d and a.sourcename = '天焰钻石'), 0) 天焰,
-                                    ifnull((select c from sta_dealcount a where a.dealdate = y.d and a.sourcename = '大地侵攻钻石'), 0) 大地
-                             from(
-                                 select z.d, z.w, ifnull(sum(b.price*b.count),0) income,
-                                            ifnull(count(issuccess),0) total,
-                                            ifnull(sum(issuccess),0) success,
-                                            ifnull(sum(if(issuccess=0, c.vendorprice*${feeRate}, 0)),0) fee
-                                     from (select from_unixtime(unix_timestamp()-day*24*3600, '%Y-%m-%d') d,
-                                                  from_unixtime(unix_timestamp()-day*24*3600,'%W') w from dat_days) z
-                                              left join imp_sellhistory b on dealdate = z.d
-                                                    inner join dat_item c on b.itemname = c.itemname and issts=1
-                                     group by z.d, z.w) y
-                             order by y.d desc");
+        $connection->update("insert into sta_dealjewcount(日期, 星期) 
+                                select from_unixtime(unix_timestamp()-day*24*3600, '%Y-%m-%d') d,
+                                  from_unixtime(unix_timestamp()-day*24*3600,'%W') w from dat_days");
+        $connection->update("update sta_dealjewcount a set
+                               收入=(select ifnull(sum(b.income)/10000,0) from sta_dealcount b where a.日期=b.dealdate),
+                               成交=(select ifnull(sum(b.dealcount),0) from sta_dealcount b where a.日期=b.dealdate),
+                               手续=(select ifnull(sum(b.fee)/10000,0) from sta_dealcount b where a.日期=b.dealdate),
+                               出售=(select ifnull(sum(b.sellcount),0) from sta_dealcount b where a.日期=b.dealdate),
+                               赤玉=(select ifnull(sum(b.dealcount),0) from sta_dealcount b where a.日期=b.dealdate and b.sourcename='赤玉石'),
+                               紫黄=(select ifnull(sum(b.dealcount),0) from sta_dealcount b where a.日期=b.dealdate and b.sourcename='紫黄晶'),
+                               王者=(select ifnull(sum(b.dealcount),0) from sta_dealcount b where a.日期=b.dealdate and b.sourcename='王者琥珀'),
+                               祖尔=(select ifnull(sum(b.dealcount),0) from sta_dealcount b where a.日期=b.dealdate and b.sourcename='祖尔之眼'),
+                               巨锆=(select ifnull(sum(b.dealcount),0) from sta_dealcount b where a.日期=b.dealdate and b.sourcename='巨锆石'),
+                               恐惧=(select ifnull(sum(b.dealcount),0) from sta_dealcount b where a.日期=b.dealdate and b.sourcename='恐惧石'),
+                               血玉=(select ifnull(sum(b.dealcount),0) from sta_dealcount b where a.日期=b.dealdate and b.sourcename='血玉石'),
+                               帝黄=(select ifnull(sum(b.dealcount),0) from sta_dealcount b where a.日期=b.dealdate and b.sourcename='帝黄晶'),
+                               秋色=(select ifnull(sum(b.dealcount),0) from sta_dealcount b where a.日期=b.dealdate and b.sourcename='秋色石'),
+                               森林=(select ifnull(sum(b.dealcount),0) from sta_dealcount b where a.日期=b.dealdate and b.sourcename='森林翡翠'),
+                               天蓝=(select ifnull(sum(b.dealcount),0) from sta_dealcount b where a.日期=b.dealdate and b.sourcename='天蓝石'),
+                               曙光=(select ifnull(sum(b.dealcount),0) from sta_dealcount b where a.日期=b.dealdate and b.sourcename='曙光猫眼石')
+        ");
 
         $connection->update("update sta_dealjewcount a
                              set 成本=
-                                     (select ((select b.costprice10 from dat_item b where b.itemname = '赤玉石') * a.赤玉
-                                         + (select b.costprice10 from dat_item b where b.itemname = '紫黄晶') * a.紫黄
-                                         + (select b.costprice10 from dat_item b where b.itemname = '王者琥珀') * a.王者
-                                         + (select b.costprice10 from dat_item b where b.itemname = '祖尔之眼') * a.祖尔
-                                         + (select b.costprice10 from dat_item b where b.itemname = '巨锆石') * a.巨锆
-                                         + (select b.costprice10 from dat_item b where b.itemname = '恐惧石') * a.恐惧
-                                         + (select b.costprice10 from dat_item b where b.itemname = '血玉石') * a.血玉
-                                         + (select b.costprice10 from dat_item b where b.itemname = '帝黄晶') * a.帝黄
-                                         + (select b.costprice10 from dat_item b where b.itemname = '秋色石') * a.秋色
-                                         + (select b.costprice10 from dat_item b where b.itemname = '森林翡翠') * a.森林
-                                         + (select b.costprice10 from dat_item b where b.itemname = '天蓝石') * a.天蓝
-                                         + (select b.costprice10 from dat_item b where b.itemname = '曙光猫眼石') * a.曙光
-                                         + (select b.costprice10 from dat_item b where b.itemname = '天焰钻石') * a.天焰
-                                         + (select b.costprice10 from dat_item b where b.itemname = '大地侵攻钻石') * a.大地) / 10000)");
+                                     ifnull((select ((select b.buyprice from dat_item b where b.itemname = '赤玉石') * a.赤玉
+                                         + (select b.buyprice from dat_item b where b.itemname = '紫黄晶') * a.紫黄
+                                         + (select b.buyprice from dat_item b where b.itemname = '王者琥珀') * a.王者
+                                         + (select b.buyprice from dat_item b where b.itemname = '祖尔之眼') * a.祖尔
+                                         + (select b.buyprice from dat_item b where b.itemname = '巨锆石') * a.巨锆
+                                         + (select b.buyprice from dat_item b where b.itemname = '恐惧石') * a.恐惧
+                                         + (select b.buyprice from dat_item b where b.itemname = '血玉石') * a.血玉
+                                         + (select b.buyprice from dat_item b where b.itemname = '帝黄晶') * a.帝黄
+                                         + (select b.buyprice from dat_item b where b.itemname = '秋色石') * a.秋色
+                                         + (select b.buyprice from dat_item b where b.itemname = '森林翡翠') * a.森林
+                                         + (select b.buyprice from dat_item b where b.itemname = '天蓝石') * a.天蓝
+                                         + (select b.buyprice from dat_item b where b.itemname = '曙光猫眼石') * a.曙光) / 10000),0)");
 
-        $connection->update('update sta_dealjewcount
-                             set 利润=收入 - 成本 - 手续,
-                                 利润率=if(成本=0, 0, (收入 - 成本 - 手续) / 成本 * 100)');
+        $connection->update("update sta_dealjewcount
+                             set 利润=收入-成本-手续,
+                                 利润率=if(成本=0, 0, (收入 - 成本 - 手续) / 成本 * 100),
+                                 成交率=if(出售=0, 0, round(成交/出售*100))");
 
         $connection->commit();
     }
